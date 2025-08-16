@@ -1,4 +1,6 @@
-// ===== 책 이름 매핑(표준책이름 ← 다양한 별칭) =====
+/********************
+ *  책 이름 매핑
+ ********************/
 const BOOK_ALIASES = (() => {
   const map = new Map();
   const norm = s => s.toLowerCase().replace(/\s+/g,'');
@@ -74,15 +76,13 @@ const BOOK_ALIASES = (() => {
   add('요한삼서',['요삼','3jn','3john']);
   add('유다서',['유','jud','jude']);
   add('요한계시록',['계','계시록','rev','revelation']);
-
-  return {
-    resolve: s => s ? (map.get(norm(s)) || null) : null
-  };
+  return { resolve: s => s ? (map.get(norm(s)) || null) : null };
 })();
 
-// ===== 입력 파서 =====
-// 허용: "요 3:16", "요 3:16~18", "요 3:16~4:2", 그리고 (이전 책 기억 후) "3:16" 등
-let lastBook = null; // 사용자 편의를 위한 "마지막 사용 책" 기억
+/********************
+ *  입력 파서
+ ********************/
+let lastBook = null;
 function parseReference(raw){
   if(!raw || !raw.trim()) throw new Error('입력이 비어 있습니다.');
   const s = raw.trim().replace(/[–—－~]/g,'~').replace(/-/g,'~');
@@ -92,10 +92,7 @@ function parseReference(raw){
 
   const bookInput = m.groups.book?.trim();
   let book = bookInput ? BOOK_ALIASES.resolve(bookInput) : (lastBook || null);
-  if(!book){
-    throw new Error('책 이름이 없습니다. 처음 한 번은 "요한복음 3:16"처럼 책을 포함해 주세요.');
-  }
-  // 성공적으로 책을 얻었으면 기억
+  if(!book) throw new Error('책 이름이 없습니다. 처음 한 번은 "요한복음 3:16"처럼 책을 포함해 주세요.');
   lastBook = book;
 
   const c1 = parseInt(m.groups.c1,10);
@@ -107,7 +104,9 @@ function parseReference(raw){
   return { book, start:{c:c1,v:v1}, end: (v2!=null)?{c:c2,v:v2}:null };
 }
 
-// ===== /bible/{책}.txt 로더 (장:절\t본문) =====
+/********************
+ *  /bible/{책}.txt 로더 (장:절\t본문)
+ ********************/
 const cache = new Map();
 async function loadBookText(bookName){
   if(cache.has(bookName)) return cache.get(bookName);
@@ -116,7 +115,6 @@ async function loadBookText(bookName){
   if(!res.ok) throw new Error(`"${bookName}" 데이터를 불러오지 못했습니다.`);
   const text = await res.text();
 
-  // 파싱
   const chapters = {};
   text.split(/\r?\n/).forEach(line => {
     const trimmed = line.trim();
@@ -139,8 +137,6 @@ function createAccessors(bookData){
   const getVerse = (ch,v) => chapters?.[ch]?.[v] ?? null;
   return { maxVerse, getVerse };
 }
-
-// ===== 범위 확장 =====
 function expandRange(range, getMaxVerse){
   const out = [];
   const { start, end } = range;
@@ -155,54 +151,197 @@ function expandRange(range, getMaxVerse){
   return out;
 }
 
-// ===== TTS: 음성 자동 선택(목록 UI 없음) =====
+/********************
+ *  말하기 + 화면 동기화
+ ********************/
 const synth = window.speechSynthesis;
 let VOICES = [];
-
-function loadVoicesOnce(){
-  VOICES = synth.getVoices();
-}
 if ('onvoiceschanged' in speechSynthesis) {
   speechSynthesis.onvoiceschanged = () => { VOICES = synth.getVoices(); };
 } else {
-  // 일부 브라우저 즉시 로드
   setTimeout(() => { VOICES = synth.getVoices(); }, 200);
 }
-
-// 음성 목록이 비어있을 수 있어, 준비될 때까지 대기(최대 2초)
 function awaitVoicesReady(timeoutMs = 2000){
   return new Promise(resolve => {
     const start = Date.now();
     const timer = setInterval(() => {
       VOICES = synth.getVoices();
       if (VOICES.length || Date.now() - start > timeoutMs) {
-        clearInterval(timer);
-        resolve();
+        clearInterval(timer); resolve();
       }
     }, 100);
   });
 }
-
 function pickDefaultKoVoice(){
   return VOICES.find(v => /ko/i.test(v.lang)) ||
          VOICES.find(v => /Korean|Korea/i.test(v.name)) ||
          VOICES[0] || null;
 }
 
-function speakLines(lines, { rate=1.0, pitch=1.0, voice=null } = {}){
-  if(!lines.length) return;
-  lines.forEach(text => {
-    const u = new SpeechSynthesisUtterance(text);
-    if(voice) u.voice = voice;
-    u.rate = rate;
-    u.pitch = pitch;
-    synth.speak(u);
+/* 화면용: 한 줄(=한 구절) DOM을 토큰(span)으로 구성 */
+function renderLine(container, text){
+  const div = document.createElement('div');
+  div.className = 'line';
+  const tokens = tokenize(text);               // [{text, isWord}]
+  const spans = [];
+  tokens.forEach(t => {
+    const span = document.createElement('span');
+    span.className = t.isWord ? 'tok' : 'tok sep';
+    span.textContent = t.text;
+    div.appendChild(span);
+    spans.push(span);
   });
+  container.appendChild(div);
+  return { root: div, tokens, spans };
+}
+/* 공백/구두점 유지 토크나이즈: 단어와 그 외를 분리 */
+function tokenize(s){
+  // 단어(문자/숫자/한글) vs 기타(공백/구두점) 보존
+  const re = /([\p{L}\p{N}]+)|([^\p{L}\p{N}]+)/gu;
+  const out = [];
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    if (m[1]) out.push({ text: m[1], isWord: true });
+    else out.push({ text: m[2], isWord: false });
+  }
+  return out;
+}
+/* boundary charIndex → 토큰 인덱스 매핑(동일 문자열 기준) */
+function buildCharOffsets(tokens){
+  const lens = tokens.map(t => t.text.length);
+  const cum = [];
+  let acc = 0;
+  for (let i=0;i<lens.length;i++){ cum.push(acc); acc += lens[i]; }
+  return { cum, total: acc };
+}
+function charIndexToTokenIndex(charIndex, offsets){
+  // charIndex가 포함되는 토큰 위치 이분 탐색
+  const { cum, total } = offsets;
+  if (charIndex >= total) return cum.length - 1;
+  let lo=0, hi=cum.length-1;
+  while (lo<=hi){
+    const mid = (lo+hi)>>1;
+    const start = cum[mid];
+    const end = start + (mid+1<cum.length ? (cum[mid+1]-start) : (total-start));
+    if (charIndex < start) hi = mid-1;
+    else if (charIndex >= end) lo = mid+1;
+    else return mid;
+  }
+  return 0;
+}
+/* 토큰 하이라이트/공개 */
+function applyProgress(spans, idx){
+  // 이전 상태 초기화
+  spans.forEach(s => s.classList.remove('cur'));
+  // idx까지 공개
+  for (let i=0;i<spans.length;i++){
+    if (i <= idx) spans[i].classList.add('on');
+  }
+  // 현재 토큰 표시(단어에만)
+  for (let j=idx; j>=0; j--){
+    if (!spans[j].classList.contains('sep')) { spans[j].classList.add('cur'); break; }
+  }
 }
 
-function stopSpeaking(){ synth.cancel(); }
+/* 발화+동기화 큐 실행 */
+let currentQueue = [];
+let fallbackTimer = null;
+function stopSpeaking(){
+  synth.cancel();
+  if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
+  // 현재 줄 강조 제거
+  currentQueue.forEach(item => item.el.root.classList.remove('reading'));
+  currentQueue = [];
+}
+async function speakAndSync(lines, rate, pitch){
+  await awaitVoicesReady(2000);
+  const voice = pickDefaultKoVoice();
 
-// ===== UI 바인딩 =====
+  // 큐 정리
+  stopSpeaking();
+  currentQueue = lines;
+
+  // 각 줄을 순차 재생
+  for (const item of currentQueue){
+    const u = new SpeechSynthesisUtterance(item.text);
+    if (voice) u.voice = voice;
+    u.rate = rate;
+    u.pitch = pitch;
+
+    // 화면 표시 준비
+    const { spans, tokens } = item.el;
+    const offsets = buildCharOffsets(tokens);
+    let lastIdx = -1;
+
+    // 줄 상태
+    item.el.root.classList.add('reading');
+
+    // 경계 이벤트(지원 브라우저에서 정확 동기화)
+    u.onboundary = (e) => {
+      // e.charIndex는 누적 문자 위치
+      const ti = charIndexToTokenIndex(e.charIndex, offsets);
+      if (ti !== lastIdx){
+        lastIdx = ti;
+        applyProgress(spans, ti);
+        smoothScrollIntoView(item.el.root);
+      }
+    };
+
+    // Fallback: 경계 이벤트가 거의 안 올 때, WPM 기반 추정 진행
+    // 한국어 음성 속도 대략 170 WPM 가정
+    const wordCount = tokens.filter(t => t.isWord).length || 1;
+    const wpm = 170 * rate;
+    const estMs = (wordCount / wpm) * 60000; // 전체 추정 시간
+    const stepMs = Math.max(40, estMs / Math.max(8, wordCount)); // 단어 단위 근사
+    let fallbackWordCursor = -1;
+    let wordIndexes = tokens.map((t, i) => t.isWord ? i : -1).filter(i => i >= 0);
+
+    // 경계가 도착하면 fallback은 자연스럽게 느려져도 무방
+    fallbackTimer = setInterval(() => {
+      // 경계 이벤트가 잘 오면 lastIdx는 꾸준히 증가함 → 그보다 앞서지 않도록 보수적으로
+      if (wordIndexes.length === 0) return;
+      const nextWordPos = Math.min(wordIndexes[Math.min(wordIndexes.length-1, fallbackWordCursor+1)], spans.length-1);
+      const targetIdx = Math.max(lastIdx, nextWordPos);
+      fallbackWordCursor++;
+      applyProgress(spans, targetIdx);
+    }, stepMs);
+
+    u.onend = () => {
+      if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
+      item.el.root.classList.remove('reading');
+      // 마지막까지 공개 보장
+      applyProgress(spans, spans.length - 1);
+    };
+
+    synth.speak(u);
+
+    // 다음 줄로 넘어가기: 현재 발화가 끝날 때까지 대기
+    await waitUntilUtteranceDone(u);
+  }
+
+  // 큐 종료
+  currentQueue = [];
+}
+function waitUntilUtteranceDone(utt){
+  return new Promise(resolve => {
+    const onEnd = () => { cleanup(); resolve(); };
+    const onErr = () => { cleanup(); resolve(); };
+    function cleanup(){
+      utt.onend = utt.onerror = utt.onboundary = null;
+    }
+    utt.onend = onEnd;
+    utt.onerror = onErr;
+  });
+}
+function smoothScrollIntoView(el){
+  const out = document.getElementById('output');
+  const top = el.offsetTop - out.clientHeight*0.3;
+  out.scrollTo({ top, behavior:'smooth' });
+}
+
+/********************
+ *  UI 바인딩
+ ********************/
 const el = {
   form      : document.getElementById('lookupForm'),
   refInput  : document.getElementById('refInput'),
@@ -213,50 +352,41 @@ const el = {
   pitchRange: document.getElementById('pitchRange'),
   pitchVal  : document.getElementById('pitchVal'),
 };
-
-// 값 라벨 업데이트
 el.rateRange.addEventListener('input', ()=> el.rateVal.textContent  = Number(el.rateRange.value).toFixed(2));
 el.pitchRange.addEventListener('input',()=> el.pitchVal.textContent = Number(el.pitchRange.value).toFixed(2));
 
-// Enter 실행: form submit 사용 (모바일/데스크탑 모두 안정적)
 el.form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  await run(); // 버튼 클릭 없이 Enter만으로도 실행
+  await run();
 });
-
-// 정지 버튼
 el.btnStop.addEventListener('click', stopSpeaking);
 
-// 핵심 실행
+/********************
+ *  실행 흐름
+ ********************/
 async function run(){
   try{
+    stopSpeaking(); // 이전 재생/타이머 정리
     el.output.textContent = '조회 중...';
+
     const parsed = parseReference(el.refInput.value);
     const bookData = await loadBookText(parsed.book);
     const { maxVerse, getVerse } = createAccessors(bookData);
     const points = expandRange(parsed, c => maxVerse(String(c)));
 
-    const lines = [];
-    const speak = [];
-    for(const p of points){
-      const head = `${parsed.book} ${p.c}:${p.v}`;
+    // 화면 준비: 줄 렌더링과 동시에 읽을 텍스트 구성
+    el.output.innerHTML = '';
+    const queue = [];
+    for (const p of points){
       const body = getVerse(String(p.c), String(p.v));
-      if(!body) lines.push(`${head}  (구절 없음)`);
-      else {
-        lines.push(`${head}  ${body}`);
-        speak.push(`${parsed.book} ${p.c}장 ${p.v}절. ${body}`);
-      }
+      const head = `${parsed.book} ${p.c}장 ${p.v}절. `;
+      const lineText = body ? (head + body) : (head + '(구절 없음)');
+      const elLine = renderLine(el.output, lineText);
+      queue.push({ text: lineText, el: elLine });
     }
-    el.output.textContent = lines.join('\n');
 
-    // 음성 준비 대기 후 자동 선택
-    await awaitVoicesReady(2000);
-    const voice = pickDefaultKoVoice();
-    speakLines(speak, {
-      voice,
-      rate : Number(el.rateRange.value),
-      pitch: Number(el.pitchRange.value),
-    });
+    // 말하기+동기화
+    await speakAndSync(queue, Number(el.rateRange.value), Number(el.pitchRange.value));
   }catch(err){
     el.output.textContent = '오류: ' + err.message;
   }
