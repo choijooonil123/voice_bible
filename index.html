@@ -13,26 +13,28 @@
     .muted { color:#666; font-size:14px; }
     .field { display:flex; align-items:center; gap:6px; }
 
-    /* 읽기 동기화 스타일 */
     #output { background:#f5f7fb; padding:16px; border-radius:12px; max-height:60vh; overflow:auto; }
     .line { margin:6px 0; padding:6px 8px; border-radius:8px; }
     .line.reading { background:#eef3ff; }
     .tok { opacity:.28; transition:opacity .06s linear, background-color .06s linear; white-space:pre; }
     .tok.on { opacity:1; }
     .tok.cur { background-color:rgba(31,111,235,0.18); border-radius:6px; }
-    .sep { opacity:.5; white-space:pre; } /* 구두점/공백 등 */
-    .controls { display:flex; gap:20px; align-items:center; }
+    .sep { opacity:.5; white-space:pre; }
+
+    .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .grow { flex:1 }
   </style>
 </head>
 <body>
   <h1>성경 구절 음성 재생 (화면 동기화)</h1>
 
-  <!-- Enter 로 실행 -->
   <form id="lookupForm" class="row" autocomplete="off">
-    <input id="refInput" name="ref" style="min-width:320px; flex:1"
+    <input id="refInput" name="ref" class="grow"
            placeholder="예) 요한복음 3:16~18, 요 3:16~4:2, (한 번 책 입력 후) 3:16" />
     <button id="btnSpeak" class="primary" type="submit">읽기 시작</button>
     <button id="btnStop" type="button">정지</button>
+    <!-- 새 버튼: PPTX 내보내기 -->
+    <button id="btnExport" type="button" title="절 단위로 슬라이드 생성">슬라이드(PPTX)</button>
   </form>
 
   <div class="controls">
@@ -48,7 +50,10 @@
     </div>
   </div>
 
-  <div id="output" class="muted">예: "요한복음 3:16~18", "요 3:16~4:2", (처음 한 번 책을 포함해 입력 후) "3:16"</div>
+  <div id="output" class="muted">예: "요한복음 3:16~18", "요 3:16~4:2", (처음 한 번 책 포함) "3:16"</div>
+
+  <!-- PptxGenJS (클라이언트에서 PPTX 생성) -->
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
 
   <script src="./js/app.js"></script>
 </body>
