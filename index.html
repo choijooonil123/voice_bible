@@ -4,47 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>성경 구절 음성 재생</title>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height:1.5; padding:20px; }
     .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-    input, select, button { padding:8px 10px; font-size:16px; }
+    input, button { padding:8px 10px; font-size:16px; }
     button { cursor:pointer; border-radius:8px; border:1px solid #ccc; background:#f8f8f8; }
     button.primary { background:#1f6feb; color:#fff; border-color:#1f6feb; }
     pre { background:#f5f5f7; padding:12px; border-radius:8px; max-height:260px; overflow:auto; }
     .muted { color:#666; font-size:14px; }
-    .pill { display:inline-block; padding:2px 8px; background:#eef; border-radius:999px; font-size:12px; margin-left:6px; }
+    .field { display:flex; align-items:center; gap:6px; }
+    .field label { font-size:14px; color:#444; }
   </style>
 </head>
 <body>
-  <h1>성경 구절 음성 재생 <span class="pill">GitHub Pages</span></h1>
+  <h1>성경 구절 음성 재생</h1>
+
+  <!-- 입력 폼: Enter로 실행되도록 form 사용 -->
+  <form id="lookupForm" class="row" autocomplete="off">
+    <input id="refInput" name="ref" style="min-width:320px; flex:1"
+           placeholder="예) 요한복음 3:16~18, 요 3:16~4:2, (이전 책 기억 후) 3:16" />
+    <button id="btnSpeak" class="primary" type="submit">읽기 시작</button>
+    <button id="btnStop" type="button">정지</button>
+  </form>
 
   <div class="row">
-    <label for="bookSelect">책 선택</label>
-    <select id="bookSelect"></select>
+    <div class="field">
+      <label for="rateRange">속도</label>
+      <input id="rateRange" type="range" min="0.7" max="1.4" step="0.05" value="1.0" />
+      <span id="rateVal" class="muted">1.00</span>
+    </div>
+    <div class="field">
+      <label for="pitchRange">피치</label>
+      <input id="pitchRange" type="range" min="0.7" max="1.4" step="0.05" value="1.0" />
+      <span id="pitchVal" class="muted">1.00</span>
+    </div>
   </div>
 
-  <div class="row">
-    <input id="refInput" style="min-width:320px; flex:1"
-           placeholder="예) 요한복음 3:16~18, 3:16~4:2, 3:16" />
-    <button id="btnSpeak" class="primary">읽기 시작</button>
-    <button id="btnStop">정지</button>
-  </div>
-
-  <div class="row">
-    <label>음성</label>
-    <select id="voiceSelect"></select>
-
-    <label for="rateRange">속도</label>
-    <input id="rateRange" type="range" min="0.7" max="1.4" step="0.05" value="1.0" />
-    <span id="rateVal" class="muted">1.00</span>
-
-    <label for="pitchRange">피치</label>
-    <input id="pitchRange" type="range" min="0.7" max="1.4" step="0.05" value="1.0" />
-    <span id="pitchVal" class="muted">1.00</span>
-  </div>
-
-  <pre id="output" class="muted">예: "요 3:16~18", "요한복음 3:16", "3:16~4:2"</pre>
+  <pre id="output" class="muted">예: "요한복음 3:16~18", "요 3:16~4:2", (처음 한 번 책을 입력한 뒤) "3:16"</pre>
 
   <script src="./js/app.js"></script>
 </body>
